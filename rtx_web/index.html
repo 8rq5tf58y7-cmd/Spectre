@@ -186,8 +186,6 @@
   </div>
 
   <script type="module">
-    import { loadPyodide } from 'https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js';
-
     const logEl = document.getElementById('log');
     const fileInput = document.getElementById('fileInput');
     const fileZone = document.getElementById('fileZone');
@@ -242,7 +240,12 @@
       ];
       for (const indexURL of CDNS) {
         try {
-          statusInit.textContent = `Loading Python… (${indexURL.includes('jsdelivr') ? 'jsdelivr' : 'unpkg'})`;
+          const cdnLabel = indexURL.includes('jsdelivr') ? 'jsdelivr' : 'unpkg';
+          statusInit.textContent = `Loading Python… (${cdnLabel})`;
+          const { loadPyodide } = await Promise.race([
+            import(indexURL + 'pyodide.mjs'),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('Module load timeout')), 30000))
+          ]);
           const py = await Promise.race([
             loadPyodide({ indexURL }),
             new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout after 2 min')), 120000))
@@ -260,7 +263,7 @@
           btnConvert.disabled = !selectedFile;
           return;
         } catch (e) {
-          log(`Try failed: ${e.message}`, 'err');
+          log(`Try failed (${indexURL.includes('jsdelivr') ? 'jsdelivr' : 'unpkg'}): ${e.message}`, 'err');
           if (indexURL === CDNS[CDNS.length - 1]) {
             statusInit.textContent = 'Failed: ' + e.message + ' — Try a different network or host.';
             statusInit.classList.remove('loading');
