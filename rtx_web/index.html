@@ -211,6 +211,7 @@
     let pyodide = null;
     let selectedFile = null;
 
+    fileInput.addEventListener('click', (e) => e.stopPropagation());
     fileZone.addEventListener('click', () => fileInput.click());
     fileZone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
     fileZone.addEventListener('dragover', (e) => { e.preventDefault(); fileZone.classList.add('dragover'); });
