@@ -301,24 +301,34 @@
         statusConvert.className = 'status loading';
         statusConvert.classList.remove('hidden');
 
+        // Clean previous output directory so stale files don't persist
+        try {
+          const prev = pyodide.FS.readdir('/tmp/out');
+          for (const n of prev) {
+            if (n === '.' || n === '..') continue;
+            try { pyodide.FS.unlink('/tmp/out/' + n); } catch (_) {}
+          }
+        } catch (_) { /* directory may not exist yet */ }
+
         pyodide.FS.writeFile('/tmp/input.rtx', bytes);
         pyodide.runPython(`
-import sys
+import sys, os
 from io import StringIO
-buf = StringIO()
-sys.stdout = buf
-sys.stderr = buf
+_buf = StringIO()
+sys.stdout = _buf
+sys.stderr = _buf
 try:
-    ok = convert_rtx_file('/tmp/input.rtx', '/tmp/out')
-    print('DONE' if ok else 'FAIL')
-except Exception as e:
+    _ok = convert_rtx_file('/tmp/input.rtx', '/tmp/out')
+    print('DONE' if _ok else 'FAIL')
+except Exception as _e:
     import traceback
     traceback.print_exc()
     print('FAIL')
-sys.stdout = sys.__stdout__
-sys.stderr = sys.__stderr__
-with open('/tmp/log.txt','w') as f:
-    f.write(buf.getvalue())
+finally:
+    sys.stdout = sys.__stdout__
+    sys.stderr = sys.__stderr__
+    with open('/tmp/log.txt','w') as _f:
+        _f.write(_buf.getvalue())
 `);
         const logTxt = pyodide.FS.readFile('/tmp/log.txt', { encoding: 'utf8' });
         log(logTxt);
@@ -335,7 +345,9 @@ with open('/tmp/log.txt','w') as f:
               outFiles.push({ name: n, data });
             }
           }
-        } catch (_) {}
+        } catch (fsErr) {
+          log('File read error: ' + fsErr.message, 'err');
+        }
 
         if (outFiles.length > 0) {
           statusConvert.textContent = `Converted ${outFiles.length} file(s)`;
@@ -353,7 +365,7 @@ with open('/tmp/log.txt','w') as f:
           }
           downloads.classList.remove('hidden');
         } else {
-          statusConvert.textContent = 'Conversion failed';
+          statusConvert.textContent = 'Conversion failed — see log';
           statusConvert.className = 'status error';
         }
       } catch (e) {

@@ -62,7 +62,11 @@ class RTXParser:
 
             self._extract_global_metadata(self.inner_root)
             self._extract_spectra(self.inner_root)
-            self._load_companion_sem_txt()
+
+            try:
+                self._load_companion_sem_txt()
+            except Exception as exc:
+                print(f"  WARNING  : companion SEM .txt scan failed – {exc}")
 
             return True
         except Exception as exc:
