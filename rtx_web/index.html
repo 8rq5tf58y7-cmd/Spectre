@@ -330,7 +330,7 @@ with open('/tmp/log.txt','w') as f:
             if (n === '.' || n === '..') continue;
             const path = '/tmp/out/' + n;
             const stat = pyodide.FS.stat(path);
-            if (stat.isFile()) {
+            if (pyodide.FS.isFile(stat.mode)) {
               const data = pyodide.FS.readFile(path);
               outFiles.push({ name: n, data });
             }
