@@ -55,6 +55,8 @@
       border: 1px solid var(--border);
     }
     .file-zone {
+      display: block;
+      position: relative;
       border: 2px dashed var(--border);
       border-radius: 10px;
       padding: 2rem 1rem;
@@ -64,11 +66,21 @@
       -webkit-user-select: none;
       user-select: none;
     }
-    .file-zone:hover, .file-zone.dragover {
+    .file-zone:hover, .file-zone.dragover, .file-zone:focus-within {
       border-color: var(--accent);
       background: rgba(137, 180, 250, 0.08);
     }
-    .file-zone input { display: none; }
+    .file-zone input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
     .file-name {
       color: var(--accent);
       font-weight: 500;
@@ -164,11 +176,11 @@
 
     <div id="main" class="hidden">
       <div class="card">
-        <div id="fileZone" class="file-zone" role="button" tabindex="0">
+        <label id="fileZone" for="fileInput" class="file-zone">
           <input type="file" id="fileInput" />
-          <div>Tap to select .rtx file</div>
+          <div>Click or drag to select .rtx file</div>
           <div id="fileName" class="file-name empty">No file selected</div>
-        </div>
+        </label>
 
         <button id="btnConvert" class="btn btn-primary" disabled>
           Convert
@@ -211,9 +223,7 @@
     let pyodide = null;
     let selectedFile = null;
 
-    fileInput.addEventListener('click', (e) => e.stopPropagation());
-    fileZone.addEventListener('click', () => fileInput.click());
-    fileZone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+    fileInput.addEventListener('click', (e) => { e.stopPropagation(); fileInput.value = ''; });
     fileZone.addEventListener('dragover', (e) => { e.preventDefault(); fileZone.classList.add('dragover'); });
     fileZone.addEventListener('dragleave', () => fileZone.classList.remove('dragover'));
     fileZone.addEventListener('drop', (e) => {
