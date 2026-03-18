@@ -306,9 +306,11 @@
           const prev = pyodide.FS.readdir('/tmp/out');
           for (const n of prev) {
             if (n === '.' || n === '..') continue;
-            try { pyodide.FS.unlink('/tmp/out/' + n); } catch (_) {}
+            try { pyodide.FS.unlink('/tmp/out/' + n); } catch (e) {
+              log('Cleanup: could not remove ' + n + ': ' + e.message, 'err');
+            }
           }
-        } catch (_) { /* directory may not exist yet */ }
+        } catch (_) { /* directory may not exist yet – OK */ }
 
         pyodide.FS.writeFile('/tmp/input.rtx', bytes);
         pyodide.runPython(`
