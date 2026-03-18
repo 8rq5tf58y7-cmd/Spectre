@@ -165,7 +165,7 @@
     <div id="main" class="hidden">
       <div class="card">
         <div id="fileZone" class="file-zone" role="button" tabindex="0">
-          <input type="file" id="fileInput" accept=".rtx" />
+          <input type="file" id="fileInput" />
           <div>Tap to select .rtx file</div>
           <div id="fileName" class="file-name empty">No file selected</div>
         </div>
@@ -219,11 +219,21 @@
       e.preventDefault();
       fileZone.classList.remove('dragover');
       const f = e.dataTransfer?.files?.[0];
-      if (f && f.name.toLowerCase().endsWith('.rtx')) setFile(f);
+      if (f && f.name.toLowerCase().endsWith('.rtx')) {
+        setFile(f);
+      } else if (f) {
+        fileName.textContent = 'Please select an .rtx file';
+        fileName.classList.add('empty');
+      }
     });
     fileInput.addEventListener('change', () => {
       const f = fileInput.files?.[0];
-      if (f) setFile(f);
+      if (f && f.name.toLowerCase().endsWith('.rtx')) {
+        setFile(f);
+      } else if (f) {
+        fileName.textContent = 'Please select an .rtx file';
+        fileName.classList.add('empty');
+      }
     });
 
     function setFile(f) {
