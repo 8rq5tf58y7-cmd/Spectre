@@ -45,6 +45,60 @@ def _sanitize_label(name: str) -> str:
     return label
 
 
+def _classify_spectrum(name: str, counts: List[int]) -> str:
+    """Classify a spectrum into a descriptive category based on its name and
+    channel data.
+
+    Returns one of:
+      'spot'        – point / spot acquisition
+      'line'        – line-scan or profile acquisition
+      'deconv_spot' – deconvoluted spot spectrum
+      'deconv_line' – deconvoluted line spectrum
+      'deconv'      – deconvoluted (type unspecified)
+      'background'  – background / bremsstrahlung
+      'calibration' – calibration or standard spectrum
+      'sum'         – sum / total / average / integrated spectrum
+      'empty'       – no counts or all-zero channels (metadata-only)
+      'spectrum'    – generic / unclassified
+    """
+    lower = name.lower().strip()
+
+    # Empty / metadata-only (counts list is empty or all zeros)
+    if not counts or all(c == 0 for c in counts):
+        return 'empty'
+
+    # Deconvoluted / fitted – check before spot/line so compound names
+    # like "Spot 1 Deconvoluted" are correctly classified.
+    if re.search(r'\bdeconv(?:olut(?:ed|ion)?)?\b|\bfit(?:ted)?\b', lower):
+        if re.search(r'\bspot\b|\bpoint\b', lower):
+            return 'deconv_spot'
+        if re.search(r'\bline(?:scan)?\b|\bprofile\b', lower):
+            return 'deconv_line'
+        return 'deconv'
+
+    # Background / bremsstrahlung
+    if re.search(r'\bbackground\b|\bbremsstrahlung\b|\bbg\b', lower):
+        return 'background'
+
+    # Calibration / standard
+    if re.search(r'\bcalib(?:ration)?\b|\bstandard\b', lower):
+        return 'calibration'
+
+    # Spot / point spectrum
+    if re.search(r'\bspot\b|\bpoint\b', lower):
+        return 'spot'
+
+    # Line-scan / profile spectrum
+    if re.search(r'\bline(?:scan)?\b|\bprofile\b', lower):
+        return 'line'
+
+    # Sum / total / average / integrated
+    if re.search(r'\bsum\b|\btotal\b|\bintegral\b|\bmean\b|\baverage\b', lower):
+        return 'sum'
+
+    return 'spectrum'
+
+
 # ---------------------------------------------------------------------------
 # Parser
 # ---------------------------------------------------------------------------
@@ -589,15 +643,28 @@ def convert_rtx_file(rtx_path: str, output_dir: str = None) -> bool:
         print(f"  Created  : {meta_path.name}")
         return True
 
-    # Build informative per-spectrum labels from spectrum names.
-    # E.g. name="Spot 12" -> label="spot_12", name="Sum" -> label="sum".
+    # Build informative per-spectrum labels that encode the spectrum type
+    # (spot, line, deconv, background, calibration, sum, empty, spectrum).
+    # E.g. name="Spot 12" -> "spot_12", name="Sum" -> "sum",
+    #       name="Result" with deconv data -> "deconv_result".
     # Duplicate / empty labels get a numeric index appended.
     labels: List[str] = []
     seen: Dict[str, int] = {}
     for i, sp in enumerate(parser.spectra):
         raw = _sanitize_label(sp.get('name', ''))
+        spec_type = _classify_spectrum(sp.get('name', ''), sp.get('counts', []))
+
         if not raw or raw == 'unknown':
-            raw = f'spectrum_{i + 1}'
+            # No usable name – use the classified type as the label.
+            raw = f'{spec_type}_{i + 1}'
+        else:
+            # Prepend the type tag when the sanitized label does not
+            # already start with the type keyword, so filenames are
+            # self-describing even without opening the file.
+            type_root = spec_type.split('_')[0]   # e.g. 'deconv' from 'deconv_spot'
+            if spec_type != 'spectrum' and not raw.startswith(type_root):
+                raw = f'{spec_type}_{raw}'
+
         # Disambiguate duplicates
         if raw in seen:
             seen[raw] += 1
@@ -608,7 +675,9 @@ def convert_rtx_file(rtx_path: str, output_dir: str = None) -> bool:
         labels.append(raw)
 
     for i, sp in enumerate(parser.spectra):
-        suffix = f'_{labels[i]}' if len(parser.spectra) > 1 else ''
+        # Always include the descriptive suffix so every MSA/CSV file
+        # is self-describing (spot vs line vs background, etc.).
+        suffix = f'_{labels[i]}'
 
         # EMSA / MSA
         msa_path = out / f'{stem}{suffix}.msa'
