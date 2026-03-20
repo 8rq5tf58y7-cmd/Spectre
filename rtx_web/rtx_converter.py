@@ -29,6 +29,20 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 import argparse
+import re
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _sanitize_label(name: str) -> str:
+    """Turn a spectrum name (e.g. 'Spot 12') into a filesystem-safe label
+    (e.g. 'spot_12').  Collapses whitespace/special chars into underscores,
+    strips leading/trailing underscores, and lower-cases the result."""
+    label = re.sub(r'[^\w]+', '_', name)   # non-alphanumeric -> '_'
+    label = label.strip('_').lower()
+    return label
 
 
 # ---------------------------------------------------------------------------
@@ -575,8 +589,26 @@ def convert_rtx_file(rtx_path: str, output_dir: str = None) -> bool:
         print(f"  Created  : {meta_path.name}")
         return True
 
+    # Build informative per-spectrum labels from spectrum names.
+    # E.g. name="Spot 12" -> label="spot_12", name="Sum" -> label="sum".
+    # Duplicate / empty labels get a numeric index appended.
+    labels: List[str] = []
+    seen: Dict[str, int] = {}
     for i, sp in enumerate(parser.spectra):
-        suffix = f'_{i+1}' if len(parser.spectra) > 1 else ''
+        raw = _sanitize_label(sp.get('name', ''))
+        if not raw or raw == 'unknown':
+            raw = f'spectrum_{i + 1}'
+        # Disambiguate duplicates
+        if raw in seen:
+            seen[raw] += 1
+            raw = f'{raw}_{seen[raw]}'
+        else:
+            seen[raw] = 1
+
+        labels.append(raw)
+
+    for i, sp in enumerate(parser.spectra):
+        suffix = f'_{labels[i]}' if len(parser.spectra) > 1 else ''
 
         # EMSA / MSA
         msa_path = out / f'{stem}{suffix}.msa'
