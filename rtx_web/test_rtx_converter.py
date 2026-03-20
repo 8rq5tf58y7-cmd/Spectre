@@ -6,6 +6,8 @@ import unittest
 from unittest.mock import MagicMock
 from rtx_converter import _sanitize_label, _classify_spectrum, EMSAExporter, MetadataExporter
 
+INDEX_HTML_PATH = os.path.join(os.path.dirname(__file__), 'index.html')
+
 
 class TestSanitizeLabel(unittest.TestCase):
     def test_basic_spot(self):
@@ -271,6 +273,19 @@ class TestMetadataUsesLabels(unittest.TestCase):
         content = self._export_and_read(spectra, labels=['spot_12', 'background'])
         self.assertIn('[spot_12]', content)
         self.assertIn('[background]', content)
+
+
+class TestWebAppStyles(unittest.TestCase):
+    """Verify the download links can display long spectrum filenames."""
+
+    def test_download_links_wrap_long_names(self):
+        with open(INDEX_HTML_PATH, encoding='utf-8') as f:
+            content = f.read()
+
+        self.assertIn('.download-link {', content)
+        block = content.split('.download-link {', 1)[1].split('}', 1)[0]
+        self.assertIn('overflow-wrap: break-word;', block)
+        self.assertIn('word-break: break-all;', block)
 
 
 if __name__ == '__main__':
