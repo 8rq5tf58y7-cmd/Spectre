@@ -1,7 +1,10 @@
 """Tests for the spectrum classification and labeling helpers in rtx_converter."""
 
+import os
+import tempfile
 import unittest
-from rtx_converter import _sanitize_label, _classify_spectrum
+from unittest.mock import MagicMock
+from rtx_converter import _sanitize_label, _classify_spectrum, EMSAExporter, MetadataExporter
 
 
 class TestSanitizeLabel(unittest.TestCase):
@@ -171,6 +174,103 @@ class TestLabelIntegration(unittest.TestCase):
     def test_generic_name_no_prefix(self):
         # Generic type "spectrum" is never prepended
         self.assertEqual(self._build_label('Sample X', self._nonzero), 'sample_x')
+
+
+class _FakeParser:
+    """Minimal stand-in for RTXParser used by exporter tests."""
+
+    def __init__(self, spectra):
+        self.filepath = '/tmp/fake.rtx'
+        self.spectra = spectra
+        self.metadata = {}
+        self.sem_metadata = {}
+
+    def energy_calibration(self, idx=0):
+        return (0.0, 10.0)
+
+    def beam_kV(self):
+        return 0.0
+
+    def live_time_s(self, idx=0):
+        return 0.0
+
+    def real_time_s(self, idx=0):
+        return 0.0
+
+    def _format_date_emsa(self):
+        return ''
+
+    def _format_time_emsa(self):
+        return ''
+
+
+class TestEMSATitleUsesLabel(unittest.TestCase):
+    """Verify that the EMSA exporter writes the informative label into #TITLE."""
+
+    def _export_and_read(self, spec_name, title=None):
+        parser = _FakeParser([{'name': spec_name, 'counts': [1, 2, 3], 'meta': {}}])
+        with tempfile.NamedTemporaryFile(mode='r', suffix='.msa', delete=False) as f:
+            path = f.name
+        try:
+            EMSAExporter(parser).export(path, 0, title=title)
+            with open(path, encoding='latin-1') as f:
+                return f.read()
+        finally:
+            os.unlink(path)
+
+    def test_title_uses_label_when_provided(self):
+        content = self._export_and_read('Spot 12', title='spot_12')
+        self.assertIn('#TITLE       : spot_12', content)
+
+    def test_title_falls_back_to_spec_name(self):
+        content = self._export_and_read('Spot 12')
+        self.assertIn('#TITLE       : Spot 12', content)
+
+    def test_title_falls_back_to_stem(self):
+        content = self._export_and_read('')
+        self.assertIn('#TITLE       : fake', content)
+
+    def test_deconv_label_in_title(self):
+        content = self._export_and_read('Result', title='deconv_result')
+        self.assertIn('#TITLE       : deconv_result', content)
+
+
+class TestMetadataUsesLabels(unittest.TestCase):
+    """Verify that the metadata exporter uses informative labels."""
+
+    def _export_and_read(self, spectra, labels=None):
+        parser = _FakeParser(spectra)
+        with tempfile.NamedTemporaryFile(mode='r', suffix='.txt', delete=False) as f:
+            path = f.name
+        try:
+            MetadataExporter(parser).export(path, labels=labels)
+            with open(path) as f:
+                return f.read()
+        finally:
+            os.unlink(path)
+
+    def test_spectrum_summary_uses_labels(self):
+        spectra = [
+            {'name': 'Spot 12', 'counts': [1, 2, 3], 'meta': {}},
+            {'name': 'Sum', 'counts': [4, 5, 6], 'meta': {}},
+        ]
+        content = self._export_and_read(spectra, labels=['spot_12', 'sum'])
+        self.assertIn('Spectrum 1: spot_12', content)
+        self.assertIn('Spectrum 2: sum', content)
+
+    def test_spectrum_summary_falls_back_to_raw_name(self):
+        spectra = [{'name': 'Spot 12', 'counts': [1, 2, 3], 'meta': {}}]
+        content = self._export_and_read(spectra)
+        self.assertIn('Spectrum 1: Spot 12', content)
+
+    def test_timing_section_uses_labels(self):
+        spectra = [
+            {'name': 'Spot 12', 'counts': [1, 2, 3], 'meta': {}},
+            {'name': 'Background', 'counts': [4, 5, 6], 'meta': {}},
+        ]
+        content = self._export_and_read(spectra, labels=['spot_12', 'background'])
+        self.assertIn('[spot_12]', content)
+        self.assertIn('[background]', content)
 
 
 if __name__ == '__main__':

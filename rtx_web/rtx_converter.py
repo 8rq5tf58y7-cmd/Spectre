@@ -361,7 +361,7 @@ class EMSAExporter:
         the HyperSpy MSA parser (it does ``line.split(': ')`` without maxsplit)."""
         return text.replace(': ', ' - ')
 
-    def export(self, path: str, idx: int = 0):
+    def export(self, path: str, idx: int = 0, title: str = None):
         if not self.p.spectra:
             raise ValueError("No spectra in parsed data")
         spec = self.p.spectra[idx]
@@ -378,7 +378,7 @@ class EMSAExporter:
         # ---- Required keywords (must be first, in this order) ----
         kv('FORMAT',      'EMSA/MAS Spectral Data File')
         kv('VERSION',     '1.0')
-        kv('TITLE',       spec['name'] or Path(self.p.filepath).stem)
+        kv('TITLE',       title or spec['name'] or Path(self.p.filepath).stem)
         kv('DATE',        self.p._format_date_emsa())
         kv('TIME',        self.p._format_time_emsa())
         kv('OWNER',       self.p.metadata.get('project_creator', ''))
@@ -484,7 +484,7 @@ class MetadataExporter:
     def __init__(self, parser: RTXParser):
         self.p = parser
 
-    def export(self, path: str):
+    def export(self, path: str, labels: List[str] = None):
         p = self.p
         with open(path, 'w') as f:
             w = f.write
@@ -543,7 +543,7 @@ class MetadataExporter:
                 lt = p.live_time_s(i)
                 rt = p.real_time_s(i)
                 dt = sp['meta'].get('DeadTime', p.metadata.get('dead_time_percent', ''))
-                label = f'  [{sp["name"]}]' if len(p.spectra) > 1 else ''
+                label = f'  [{labels[i]}]' if labels and len(p.spectra) > 1 else (f'  [{sp["name"]}]' if len(p.spectra) > 1 else '')
                 self._kv(f, f'Real time (s){label}', f'{rt:.3f}' if rt else None)
                 self._kv(f, f'Live time (s){label}', f'{lt:.3f}' if lt else None)
                 self._kv(f, f'Dead time (%){label}', dt if dt else None)
@@ -587,7 +587,8 @@ class MetadataExporter:
                 off_eV, gain_eV = p.energy_calibration(i)
                 max_ch = counts.index(max(counts)) if counts else 0
                 max_eV = off_eV + max_ch * gain_eV
-                w(f"\n  Spectrum {i+1}: {sp['name']}\n")
+                spec_label = labels[i] if labels else sp['name']
+                w(f"\n  Spectrum {i+1}: {spec_label}\n")
                 w(f"    Channels       : {len(counts)}\n")
                 w(f"    Total counts   : {sum(counts):,}\n")
                 w(f"    Max channel    : {max(counts):,}  (ch {max_ch}, ~{max_eV:.0f} eV / {max_eV/1000:.2f} keV)\n")
@@ -682,7 +683,7 @@ def convert_rtx_file(rtx_path: str, output_dir: str = None) -> bool:
         # EMSA / MSA
         msa_path = out / f'{stem}{suffix}.msa'
         try:
-            EMSAExporter(parser).export(str(msa_path), i)
+            EMSAExporter(parser).export(str(msa_path), i, title=labels[i])
             print(f"  Created  : {msa_path.name}  ({len(sp['counts'])} channels, EMSA/MSA 1.0)")
         except Exception as e:
             print(f"  WARNING  : EMSA export failed – {e}")
@@ -697,7 +698,7 @@ def convert_rtx_file(rtx_path: str, output_dir: str = None) -> bool:
 
     # Metadata report (one per RTX file)
     meta_path = out / f'{stem}_metadata.txt'
-    MetadataExporter(parser).export(str(meta_path))
+    MetadataExporter(parser).export(str(meta_path), labels=labels)
     print(f"  Created  : {meta_path.name}")
 
     return True
