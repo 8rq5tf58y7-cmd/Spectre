@@ -6,6 +6,8 @@ import unittest
 from unittest.mock import MagicMock
 from rtx_converter import _sanitize_label, _classify_spectrum, EMSAExporter, MetadataExporter
 
+INDEX_HTML_PATH = os.path.join(os.path.dirname(__file__), 'index.html')
+
 
 class TestSanitizeLabel(unittest.TestCase):
     def test_basic_spot(self):
@@ -277,13 +279,13 @@ class TestWebAppStyles(unittest.TestCase):
     """Verify the download links can display long spectrum filenames."""
 
     def test_download_links_wrap_long_names(self):
-        index_path = os.path.join(os.path.dirname(__file__), 'index.html')
-        with open(index_path, encoding='utf-8') as f:
+        with open(INDEX_HTML_PATH, encoding='utf-8') as f:
             content = f.read()
 
         self.assertIn('.download-link {', content)
-        self.assertIn('overflow-wrap: break-word;', content)
-        self.assertIn('word-break: break-all;', content)
+        block = content.split('.download-link {', 1)[1].split('}', 1)[0]
+        self.assertIn('overflow-wrap: break-word;', block)
+        self.assertIn('word-break: break-all;', block)
 
 
 if __name__ == '__main__':
