@@ -4,7 +4,7 @@ import os
 import tempfile
 import unittest
 from unittest.mock import MagicMock
-from rtx_converter import _sanitize_label, _classify_spectrum, _deduplicate_label, EMSAExporter, MetadataExporter
+from rtx_converter import _sanitize_label, _classify_spectrum, _deduplicate_label, _build_spectrum_label, EMSAExporter, MetadataExporter
 
 INDEX_HTML_PATH = os.path.join(os.path.dirname(__file__), 'index.html')
 
@@ -58,6 +58,12 @@ class TestClassifySpectrum(unittest.TestCase):
     def test_profile(self):
         self.assertEqual(_classify_spectrum('Profile 4', self._nonzero), 'line')
 
+    def test_scan(self):
+        self.assertEqual(_classify_spectrum('Scan', self._nonzero), 'line')
+
+    def test_scan_numbered(self):
+        self.assertEqual(_classify_spectrum('Scan 1', self._nonzero), 'line')
+
     # -- deconvoluted --
     def test_deconv(self):
         self.assertEqual(_classify_spectrum('Deconvoluted', self._nonzero), 'deconv')
@@ -76,6 +82,9 @@ class TestClassifySpectrum(unittest.TestCase):
 
     def test_deconv_point(self):
         self.assertEqual(_classify_spectrum('Point 3 Fit', self._nonzero), 'deconv_spot')
+
+    def test_deconv_scan(self):
+        self.assertEqual(_classify_spectrum('Scan Deconvoluted', self._nonzero), 'deconv_line')
 
     # -- background --
     def test_background(self):
@@ -129,16 +138,7 @@ class TestLabelIntegration(unittest.TestCase):
 
     def _build_label(self, name, counts, index=0):
         """Replicate the label-building logic from convert_rtx_file."""
-        raw = _sanitize_label(name)
-        spec_type = _classify_spectrum(name, counts)
-
-        if not raw or raw == 'unknown':
-            raw = f'{spec_type}_{index + 1}'
-        else:
-            type_root = spec_type.split('_')[0]
-            if spec_type != 'spectrum' and not raw.startswith(type_root):
-                raw = f'{spec_type}_{raw}'
-        return raw
+        return _build_spectrum_label(name, counts, index)
 
     def test_spot_name_keeps_label(self):
         # "Spot 12" already starts with "spot" so no prefix added
@@ -147,21 +147,21 @@ class TestLabelIntegration(unittest.TestCase):
     def test_sum_prepends_type(self):
         self.assertEqual(self._build_label('Sum', self._nonzero), 'sum')
 
-    def test_line_name_keeps_label(self):
-        self.assertEqual(self._build_label('Line 2', self._nonzero), 'line_2')
+    def test_line_uses_scan_label(self):
+        self.assertEqual(self._build_label('Line 2', self._nonzero), 'scan')
 
     def test_background_prepends(self):
         # "Background" already starts with "background"
         self.assertEqual(self._build_label('Background', self._nonzero), 'background')
 
     def test_calibration_named_standard(self):
-        # "Standard" does not start with "calib" so type is prepended
-        self.assertEqual(self._build_label('Standard', self._nonzero), 'calibration_standard')
+        # "Standard" is classified as calibration → canonical "calibration"
+        self.assertEqual(self._build_label('Standard', self._nonzero), 'calibration')
 
-    def test_deconv_spot_compound(self):
+    def test_deconv_spot_uses_deconv_label(self):
         self.assertEqual(
             self._build_label('Spot 1 Deconvoluted', self._nonzero),
-            'deconv_spot_spot_1_deconvoluted',
+            'deconv',
         )
 
     def test_empty_name_uses_type(self):
@@ -176,6 +176,21 @@ class TestLabelIntegration(unittest.TestCase):
     def test_generic_name_no_prefix(self):
         # Generic type "spectrum" is never prepended
         self.assertEqual(self._build_label('Sample X', self._nonzero), 'sample_x')
+
+    def test_scan_uses_scan_label(self):
+        self.assertEqual(self._build_label('Scan', self._nonzero), 'scan')
+
+    def test_deconv_line_uses_deconv_label(self):
+        self.assertEqual(self._build_label('Line 1 Fitted', self._nonzero), 'deconv')
+
+    def test_empty_deconv_label(self):
+        self.assertEqual(self._build_label('Deconv', [0, 0, 0]), 'empty_deconv')
+
+    def test_empty_scan_label(self):
+        self.assertEqual(self._build_label('Scan', [0, 0, 0]), 'empty_scan')
+
+    def test_empty_generic_label(self):
+        self.assertEqual(self._build_label('', [0, 0, 0], index=4), 'empty')
 
 
 class TestLabelDeduplication(unittest.TestCase):
