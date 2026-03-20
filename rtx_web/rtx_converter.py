@@ -543,7 +543,11 @@ class MetadataExporter:
                 lt = p.live_time_s(i)
                 rt = p.real_time_s(i)
                 dt = sp['meta'].get('DeadTime', p.metadata.get('dead_time_percent', ''))
-                label = f'  [{labels[i]}]' if labels and len(p.spectra) > 1 else (f'  [{sp["name"]}]' if len(p.spectra) > 1 else '')
+                if len(p.spectra) > 1:
+                    tag = labels[i] if labels else sp['name']
+                    label = f'  [{tag}]'
+                else:
+                    label = ''
                 self._kv(f, f'Real time (s){label}', f'{rt:.3f}' if rt else None)
                 self._kv(f, f'Live time (s){label}', f'{lt:.3f}' if lt else None)
                 self._kv(f, f'Dead time (%){label}', dt if dt else None)
