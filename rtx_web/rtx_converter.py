@@ -27,7 +27,7 @@ import sys
 import struct
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 import argparse
 import re
 
@@ -97,6 +97,21 @@ def _classify_spectrum(name: str, counts: List[int]) -> str:
         return 'sum'
 
     return 'spectrum'
+
+
+def _deduplicate_label(label: str, seen: Set[str]) -> str:
+    """Return a unique label by appending an incrementing numeric suffix."""
+    if label not in seen:
+        seen.add(label)
+        return label
+
+    suffix = 2
+    while True:
+        candidate = f'{label}_{suffix}'
+        if candidate not in seen:
+            seen.add(candidate)
+            return candidate
+        suffix += 1
 
 
 # ---------------------------------------------------------------------------
@@ -654,7 +669,7 @@ def convert_rtx_file(rtx_path: str, output_dir: str = None) -> bool:
     #       name="Result" with deconv data -> "deconv_result".
     # Duplicate / empty labels get a numeric index appended.
     labels: List[str] = []
-    seen: Dict[str, int] = {}
+    seen: Set[str] = set()
     for i, sp in enumerate(parser.spectra):
         raw = _sanitize_label(sp.get('name', ''))
         spec_type = _classify_spectrum(sp.get('name', ''), sp.get('counts', []))
@@ -671,11 +686,7 @@ def convert_rtx_file(rtx_path: str, output_dir: str = None) -> bool:
                 raw = f'{spec_type}_{raw}'
 
         # Disambiguate duplicates
-        if raw in seen:
-            seen[raw] += 1
-            raw = f'{raw}_{seen[raw]}'
-        else:
-            seen[raw] = 1
+        raw = _deduplicate_label(raw, seen)
 
         labels.append(raw)
 

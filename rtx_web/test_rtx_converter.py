@@ -4,7 +4,7 @@ import os
 import tempfile
 import unittest
 from unittest.mock import MagicMock
-from rtx_converter import _sanitize_label, _classify_spectrum, EMSAExporter, MetadataExporter
+from rtx_converter import _sanitize_label, _classify_spectrum, _deduplicate_label, EMSAExporter, MetadataExporter
 
 INDEX_HTML_PATH = os.path.join(os.path.dirname(__file__), 'index.html')
 
@@ -176,6 +176,18 @@ class TestLabelIntegration(unittest.TestCase):
     def test_generic_name_no_prefix(self):
         # Generic type "spectrum" is never prepended
         self.assertEqual(self._build_label('Sample X', self._nonzero), 'sample_x')
+
+
+class TestLabelDeduplication(unittest.TestCase):
+    def test_suffix_collision_avoids_reuse(self):
+        seen = set()
+        labels = [
+            _deduplicate_label('spectrum_1', seen),
+            _deduplicate_label('spectrum_1', seen),
+            _deduplicate_label('spectrum_1_2', seen),
+            _deduplicate_label('spectrum_1', seen),
+        ]
+        self.assertEqual(labels, ['spectrum_1', 'spectrum_1_2', 'spectrum_1_2_2', 'spectrum_1_3'])
 
 
 class _FakeParser:
