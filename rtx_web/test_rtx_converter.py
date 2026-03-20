@@ -273,5 +273,18 @@ class TestMetadataUsesLabels(unittest.TestCase):
         self.assertIn('[background]', content)
 
 
+class TestWebAppStyles(unittest.TestCase):
+    """Verify the download links can display long spectrum filenames."""
+
+    def test_download_links_wrap_long_names(self):
+        index_path = os.path.join(os.path.dirname(__file__), 'index.html')
+        with open(index_path, encoding='utf-8') as f:
+            content = f.read()
+
+        self.assertIn('.download-link {', content)
+        self.assertIn('overflow-wrap: break-word;', content)
+        self.assertIn('word-break: break-all;', content)
+
+
 if __name__ == '__main__':
     unittest.main()
