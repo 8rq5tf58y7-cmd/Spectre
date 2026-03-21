@@ -154,6 +154,21 @@
       word-break: break-all;
     }
     .download-link:hover { background: var(--border); }
+    .download-zip {
+      display: block;
+      padding: 0.75rem 1rem;
+      margin-bottom: 0.75rem;
+      background: var(--accent);
+      border-radius: 8px;
+      color: var(--bg);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 600;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .download-zip:hover { background: #b4d0fb; }
     .status {
       padding: 0.75rem;
       border-radius: 8px;
@@ -225,6 +240,37 @@
     const statusConvert = document.getElementById('statusConvert');
     const main = document.getElementById('main');
     const downloads = document.getElementById('downloads');
+
+    let JSZip = null;
+    async function loadJSZip() {
+      const CDNS = [
+        {
+          url: 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
+          integrity: 'sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb'
+        },
+        {
+          url: 'https://unpkg.com/jszip@3.10.1/dist/jszip.min.js',
+          integrity: null
+        }
+      ];
+      for (const cdn of CDNS) {
+        try {
+          await new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = cdn.url;
+            if (cdn.integrity) {
+              s.integrity = cdn.integrity;
+              s.crossOrigin = 'anonymous';
+            }
+            s.onload = resolve;
+            s.onerror = () => reject(new Error('Script load failed'));
+            document.head.appendChild(s);
+          });
+          if (window.JSZip) { JSZip = window.JSZip; return; }
+        } catch (_) { /* try next CDN */ }
+      }
+      log('ZIP download unavailable (JSZip failed to load)', 'err');
+    }
 
     function log(msg, cls = '') {
       const span = document.createElement('span');
@@ -386,6 +432,28 @@ finally:
           const dl = document.createElement('h3');
           dl.textContent = 'Download';
           downloads.appendChild(dl);
+          if (JSZip && outFiles.length > 1) {
+            const zipLink = document.createElement('a');
+            zipLink.className = 'download-zip';
+            zipLink.textContent = 'Download All (.zip)';
+            zipLink.href = '#';
+            const stem = selectedFile.name.replace(/\.rtx$/i, '');
+            zipLink.addEventListener('click', async (e) => {
+              e.preventDefault();
+              const zip = new JSZip();
+              for (const { name, data } of outFiles) {
+                zip.file(name, data);
+              }
+              const blob = await zip.generateAsync({ type: 'blob' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = stem + '.zip';
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 60000);
+            });
+            downloads.appendChild(zipLink);
+          }
           for (const { name, data } of outFiles) {
             const a = document.createElement('a');
             a.className = 'download-link';
@@ -409,6 +477,7 @@ finally:
     });
 
     initPyodide();
+    loadJSZip();
   </script>
 </body>
 </html>
