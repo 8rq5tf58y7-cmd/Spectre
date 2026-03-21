@@ -72,7 +72,7 @@ def _classify_spectrum(name: str, counts: List[int]) -> str:
     if re.search(r'\bdeconv(?:olut(?:ed|ion)?)?\b|\bfit(?:ted)?\b', lower):
         if re.search(r'\bspot\b|\bpoint\b', lower):
             return 'deconv_spot'
-        if re.search(r'\bline(?:scan)?\b|\bprofile\b', lower):
+        if re.search(r'\bline(?:scan)?\b|\bprofile\b|\bscan\b', lower):
             return 'deconv_line'
         return 'deconv'
 
@@ -88,8 +88,8 @@ def _classify_spectrum(name: str, counts: List[int]) -> str:
     if re.search(r'\bspot\b|\bpoint\b', lower):
         return 'spot'
 
-    # Line-scan / profile spectrum
-    if re.search(r'\bline(?:scan)?\b|\bprofile\b', lower):
+    # Line-scan / profile / scan spectrum
+    if re.search(r'\bline(?:scan)?\b|\bprofile\b|\bscan\b', lower):
         return 'line'
 
     # Sum / total / average / integrated
@@ -112,6 +112,51 @@ def _deduplicate_label(label: str, seen: Set[str]) -> str:
             seen.add(candidate)
             return candidate
         suffix += 1
+
+
+# Canonical filename label for each spectrum type.
+# ``None`` means "keep the raw (sanitized) spectrum name".
+_TYPE_CANONICAL: Dict[str, Optional[str]] = {
+    'spectrum':    None,
+    'spot':        None,
+    'line':        'scan',
+    'deconv':      'deconv',
+    'deconv_spot': 'deconv',
+    'deconv_line': 'deconv',
+    'background':  'background',
+    'calibration': 'calibration',
+    'sum':         'sum',
+}
+
+
+def _build_spectrum_label(name: str, counts: List[int], index: int = 0) -> str:
+    """Build a short, self-describing label for a spectrum.
+
+    Uses *canonical* type labels so filenames clearly distinguish spot
+    from line spectra, deconvoluted variants, backgrounds, etc., without
+    echoing the (often verbose) original spectrum name.
+
+    Returns the label **before** deduplication.
+    """
+    raw = _sanitize_label(name)
+    spec_type = _classify_spectrum(name, counts)
+
+    if spec_type == 'empty':
+        # Re-classify ignoring empty counts to determine the sub-type.
+        inner_type = _classify_spectrum(name, [1])
+        inner_canonical = _TYPE_CANONICAL.get(inner_type)
+        if inner_canonical is not None:
+            return f'empty_{inner_canonical}'
+        if raw and raw != 'unknown':
+            return f'empty_{raw}'
+        return 'empty'
+
+    canonical = _TYPE_CANONICAL.get(spec_type)
+    if canonical is not None:
+        return canonical
+    if raw and raw != 'unknown':
+        return raw
+    return f'spectrum_{index + 1}'
 
 
 # ---------------------------------------------------------------------------
@@ -663,32 +708,15 @@ def convert_rtx_file(rtx_path: str, output_dir: str = None) -> bool:
         print(f"  Created  : {meta_path.name}")
         return True
 
-    # Build informative per-spectrum labels that encode the spectrum type
-    # (spot, line, deconv, background, calibration, sum, empty, spectrum).
-    # E.g. name="Spot 12" -> "spot_12", name="Sum" -> "sum",
-    #       name="Result" with deconv data -> "deconv_result".
-    # Duplicate / empty labels get a numeric index appended.
+    # Build informative per-spectrum labels using canonical type names so
+    # filenames clearly distinguish spot, line/scan, deconv, background,
+    # calibration, sum, and empty spectra.  Duplicates get a numeric suffix.
     labels: List[str] = []
     seen: Set[str] = set()
     for i, sp in enumerate(parser.spectra):
-        raw = _sanitize_label(sp.get('name', ''))
-        spec_type = _classify_spectrum(sp.get('name', ''), sp.get('counts', []))
-
-        if not raw or raw == 'unknown':
-            # No usable name – use the classified type as the label.
-            raw = f'{spec_type}_{i + 1}'
-        else:
-            # Prepend the type tag when the sanitized label does not
-            # already start with the type keyword, so filenames are
-            # self-describing even without opening the file.
-            type_root = spec_type.split('_')[0]   # e.g. 'deconv' from 'deconv_spot'
-            if spec_type != 'spectrum' and not raw.startswith(type_root):
-                raw = f'{spec_type}_{raw}'
-
-        # Disambiguate duplicates
-        raw = _deduplicate_label(raw, seen)
-
-        labels.append(raw)
+        label = _build_spectrum_label(sp.get('name', ''), sp.get('counts', []), i)
+        label = _deduplicate_label(label, seen)
+        labels.append(label)
 
     for i, sp in enumerate(parser.spectra):
         # Always include the descriptive suffix so every MSA/CSV file
