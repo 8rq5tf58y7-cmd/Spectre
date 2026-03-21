@@ -431,6 +431,23 @@ class TestWebAppStyles(unittest.TestCase):
         self.assertIn('overflow-wrap: break-word;', block)
         self.assertIn('word-break: break-all;', block)
 
+    def test_download_zip_style_exists(self):
+        with open(INDEX_HTML_PATH, encoding='utf-8') as f:
+            content = f.read()
+
+        self.assertIn('.download-zip {', content)
+        block = content.split('.download-zip {', 1)[1].split('}', 1)[0]
+        self.assertIn('cursor: pointer;', block)
+        self.assertIn('text-align: center;', block)
+
+    def test_jszip_loading(self):
+        with open(INDEX_HTML_PATH, encoding='utf-8') as f:
+            content = f.read()
+
+        self.assertIn('jszip', content)
+        self.assertIn('loadJSZip', content)
+        self.assertIn('Download All (.zip)', content)
+
 
 if __name__ == '__main__':
     unittest.main()
