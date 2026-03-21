@@ -279,7 +279,7 @@
             new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout after 2 min')), 120000))
           ]);
           log('Fetching converter…');
-          const resp = await fetch('rtx_converter.py');
+          const resp = await fetch('rtx_converter.py', { cache: 'no-store' });
           if (!resp.ok) throw new Error(`rtx_converter.py: ${resp.status}`);
           const code = await resp.text();
           py.FS.writeFile('/tmp/rtx_converter.py', code);
