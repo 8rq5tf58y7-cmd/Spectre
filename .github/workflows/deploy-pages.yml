@@ -27,6 +27,12 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Inject build version
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M UTC")
+          sed -i "s|<!-- BUILD_VERSION -->|Build ${SHORT_SHA} · ${TIMESTAMP}|" rtx_web/index.html
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
